@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agenda Acadêmica</title>
+
+<style>
+:root{
+--card:#ffffff;
+--text:#111827;
+--calendar:#ffffff;
+}
+.dark{
+--card:#1f2937;
+--text:#f3f4f6;
+--calendar:#374151;
+}
+body{
+font-family:Segoe UI;
+margin:0;
+padding:20px;
+display:flex;
+flex-direction:column;
+align-items:center;
+transition:0.3s;
+color:var(--text);
+}
+header{text-align:center;margin-bottom:20px;}
+.controls{
+display:flex;
+gap:10px;
+background:var(--card);
+padding:10px 20px;
+border-radius:30px;
+box-shadow:0 6px 20px rgba(0,0,0,0.15);
+margin-bottom:20px;
+align-items:center;
+}
+button{
+border:none;
+padding:6px 12px;
+border-radius:6px;
+cursor:pointer;
+font-weight:bold;
+}
+.calendar{
+background:var(--calendar);
+padding:15px;
+border-radius:10px;
+width:100%;
+max-width:1000px;
+box-shadow:0 8px 20px rgba(0,0,0,0.2);
+}
+.weekdays{
+display:grid;
+grid-template-columns:repeat(7,1fr);
+text-align:center;
+font-weight:bold;
+}
+.days{
+display:grid;
+grid-template-columns:repeat(7,1fr);
+gap:8px;
+margin-top:10px;
+}
+.day{
+background:rgba(255,255,255,0.8);
+border-radius:6px;
+padding:6px;
+min-height:95px;
+position:relative;
+}
+.dark .day{
+background:rgba(0,0,0,0.3);
+}
+.weekend{
+background:#ff3b3b;
+color:white;
+}
+.holiday{
+background:#ffd166;
+font-size:10px;
+padding:2px;
+border-radius:4px;
+margin-top:3px;
+cursor:pointer;
+}
+.day-number{font-weight:bold;}
+.task{
+margin-top:4px;
+padding:3px;
+border-radius:4px;
+font-size:11px;
+color:white;
+background:#22c55e;
+cursor:pointer;
+display:flex;
+justify-content:space-between;
+align-items:center;
+}
+.done{background:#2563eb;}
+.star{color:gold;margin-left:4px;}
+.modal,.detail{
+display:none;
+position:fixed;
+top:0;
+left:0;
+width:100%;
+height:100%;
+background:rgba(0,0,0,0.5);
+align-items:center;
+justify-content:center;
+}
+.modal-box,.detail-box{
+background:var(--card);
+padding:20px;
+border-radius:10px;
+width:330px;
+}
+.detail-box img{
+max-width:100%;
+border-radius:6px;
+margin-top:10px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+<h1>📚 Agenda Acadêmica</h1>
+<p>Organize seus trabalhos</p>
+</header>
+
+<div class="controls">
+<button onclick="changeMonth(-1)">⬅</button>
+<h3 id="monthDisplay"></h3>
+<button onclick="changeMonth(1)">➡</button>
+<button onclick="openModal()">➕ Trabalho</button>
+<button onclick="openHolidayModal()">🎉 Feriado</button>
+<button onclick="toggleTheme()">🌙</button>
+</div>
+
+<div class="calendar">
+<div class="weekdays">
+<div>Dom</div>
+<div>Seg</div>
+<div>Ter</div>
+<div>Qua</div>
+<div>Qui</div>
+<div>Sex</div>
+<div>Sáb</div>
+</div>
+<div class="days" id="days"></div>
+</div>
+
+<!-- Modal de Trabalho -->
+<div class="modal" id="modal">
+<div class="modal-box">
+<h3>Novo Trabalho</h3>
+<input id="title" placeholder="Título"><br><br>
+<input id="subject" placeholder="Matéria"><br><br>
+<input type="date" id="date"><br><br>
+<textarea id="obs" placeholder="Observação"></textarea><br><br>
+<input type="file" id="photo"><br><br>
+<button onclick="saveTask()" style="width:100%">Salvar</button>
+<button onclick="closeModal()" style="width:100%;margin-top:5px">Cancelar</button>
+</div>
+</div>
+
+<!-- Modal de Feriado -->
+<div class="modal" id="holidayModal">
+<div class="modal-box">
+<h3>Criar Feriado</h3>
+<input id="holidayName" placeholder="Nome"><br><br>
+<input type="date" id="holidayDate"><br><br>
+<button onclick="saveHoliday()" style="width:100%">Salvar</button>
+<button onclick="closeHolidayModal()" style="width:100%;margin-top:5px">Cancelar</button>
+</div>
+</div>
+
+<!-- Modal Detalhes -->
+<div class="detail" id="detail">
+<div class="detail-box">
+<h3 id="dTitle"></h3>
+<p id="dSubject"></p>
+<p id="dDate"></p>
+<p id="dObs"></p>
+<img id="dImg">
+<br><br>
+<button onclick="markDone()">⭐ Concluído</button>
+<button onclick="deleteTask()">🗑 Excluir</button>
+<button onclick="closeDetail()">Fechar</button>
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+<script>
+let currentDate=new Date()
+let tasks=JSON.parse(localStorage.getItem("tasks"))||[]
+let holidays=JSON.parse(localStorage.getItem("holidays"))||{
+"01-01":"🎆 Confraternização",
+"04-21":"🎯 Tiradentes",
+"05-01":"👷 Dia do Trabalhador",
+"09-07":"🇧🇷 Independência",
+"10-12":"⛪ N. Sra Aparecida",
+"11-02":"🕯 Finados",
+"11-15":"🇧🇷 Proclamação",
+"12-25":"🎄 Natal"
+}
+const monthNames=[
+"Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+"Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"
+]
+const monthThemes=[
+{light:"#ffffff",dark:"#bfbfbf"},
+{light:"#7c3aed",dark:"#4c1d95"},
+{light:"#c084fc",dark:"#7e22ce"},
+{light:"#2563eb",dark:"#1e3a8a"},
+{light:"#facc15",dark:"#a16207"},
+{light:"#dc2626",dark:"#7f1d1d"},
+{light:"#facc15",dark:"#a16207"},
+{light:"#d4af37",dark:"#8c6b00"},
+{light:"#facc15",dark:"#a16207"},
+{light:"#ec4899",dark:"#9d174d"},
+{light:"#2563eb",dark:"#1e3a8a"},
+{light:"#dc2626",dark:"#7f1d1d"}
+]
+
+let selected=null
+
+function renderCalendar(){
+const year=currentDate.getFullYear()
+const month=currentDate.getMonth()
+if(year<2020) currentDate.setFullYear(2020)
+if(year>2030) currentDate.setFullYear(2030)
+document.getElementById("monthDisplay").innerText=monthNames[month]+" "+year
+const theme=monthThemes[month]
+document.body.style.background=document.body.classList.contains("dark")?theme.dark:theme.light
+const firstDay=new Date(year,month,1).getDay()
+const daysInMonth=new Date(year,month+1,0).getDate()
+const container=document.getElementById("days")
+container.innerHTML=""
+for(let i=0;i<firstDay;i++) container.appendChild(document.createElement("div"))
+for(let d=1;d<=daysInMonth;d++){
+const day=document.createElement("div")
+day.className="day"
+const dateObj=new Date(year,month,d)
+if(dateObj.getDay()==0||dateObj.getDay()==6) day.classList.add("weekend")
+const number=document.createElement("div")
+number.className="day-number"
+number.innerText=d
+day.appendChild(number)
+const key=String(month+1).padStart(2,"0")+"-"+String(d).padStart(2,"0")
+if(holidays[key]){
+const h=document.createElement("div")
+h.className="holiday"
+h.innerText=holidays[key]
+h.onclick=()=>confetti({particleCount:300,spread:160})
+day.appendChild(h)
+}
+const dateStr=`${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`
+tasks.filter(t=>t.date===dateStr).forEach(task=>{
+const div=document.createElement("div")
+div.className="task "+(task.done?"done":"")
+div.innerHTML="📄 "+task.title+(task.done?'<span class="star">⭐</span>':'')
+div.onclick=()=>showTask(task.id)
+day.appendChild(div)
+})
+if(d===new Date().getDate() && month===new Date().getMonth() && year===new Date().getFullYear()){
+day.style.border="3px solid #000"
+if(document.body.classList.contains("dark")) day.style.border="3px solid #fff"
+}
+container.appendChild(day)
+}
+}
+
+function changeMonth(step){currentDate.setMonth(currentDate.getMonth()+step);renderCalendar()}
+function openModal(){document.getElementById("modal").style.display="flex"}
+function closeModal(){document.getElementById("modal").style.display="none"}
+
+function saveTask(){
+const title=document.getElementById("title").value
+const subject=document.getElementById("subject").value
+const date=document.getElementById("date").value
+const obs=document.getElementById("obs").value
+const file=document.getElementById("photo").files[0]
+let reader=new FileReader()
+reader.onload=function(){
+tasks.push({id:Date.now().toString(),title,subject,date,obs,img:reader.result,done:false})
+localStorage.setItem("tasks",JSON.stringify(tasks))
+renderCalendar()
+}
+if(file) reader.readAsDataURL(file)
+else reader.onload()
+closeModal()
+}
+
+function openHolidayModal(){document.getElementById("holidayModal").style.display="flex"}
+function closeHolidayModal(){document.getElementById("holidayModal").style.display="none"}
+function saveHoliday(){
+const name=document.getElementById("holidayName").value
+const date=document.getElementById("holidayDate").value
+if(!name||!date) return
+const d=new Date(date)
+const key=String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")
+holidays[key]=name
+localStorage.setItem("holidays",JSON.stringify(holidays))
+renderCalendar()
+closeHolidayModal()
+}
+
+function showTask(id){
+selected=id
+const t=tasks.find(x=>x.id===id)
+document.getElementById("dTitle").innerText=t.title
+document.getElementById("dSubject").innerText="Matéria: "+t.subject
+document.getElementById("dDate").innerText="Data: "+t.date
+document.getElementById("dObs").innerText=t.obs
+const img=document.getElementById("dImg")
+if(t.img){img.src=t.img; img.style.display="block"}else{img.style.display="none"}
+document.getElementById("detail").style.display="flex"
+}
+
+function closeDetail(){document.getElementById("detail").style.display="none"}
+
+function markDone(){if(!selected) return; let t=tasks.find(x=>x.id===selected); t.done=!t.done; localStorage.setItem("tasks",JSON.stringify(tasks)); renderCalendar(); closeDetail()}
+function deleteTask(){tasks=tasks.filter(x=>x.id!==selected); localStorage.setItem("tasks",JSON.stringify(tasks)); renderCalendar(); closeDetail()}
+
+// Adicionar opção de excluir feriado
+function deleteHoliday(key){
+if(!holidays[key]) return
+delete holidays[key]
+localStorage.setItem("holidays",JSON.stringify(holidays))
+renderCalendar()
+}
+
+function toggleTheme(){document.body.classList.toggle("dark"); renderCalendar()}
+
+renderCalendar()
+</script>
+
+</body>
+  </html>
