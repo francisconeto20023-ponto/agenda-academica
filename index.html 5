@@ -252,3 +252,4 @@ function deleteTask(){
 
 function toggleTheme(){document.body.classList.toggle("dark"); renderCalendar();}
 renderCalendar();
+
