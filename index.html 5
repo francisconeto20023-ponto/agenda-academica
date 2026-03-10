@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agenda Acadêmica</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+<h1>📚 Agenda Acadêmica</h1>
+<p>Organize seus trabalhos</p>
+</header>
+
+<div class="controls">
+  <button onclick="changeMonth(-1)">⬅</button>
+  <h3 id="monthDisplay"></h3>
+  <button onclick="changeMonth(1)">➡</button>
+  <button onclick="openModal()">➕ Trabalho</button>
+  <button onclick="openHolidayModal()">🎉 Feriado</button>
+  <button onclick="toggleTheme()">🌙</button>
+</div>
+
+<div class="calendar">
+  <div class="weekdays">
+    <div>Dom</div>
+    <div>Seg</div>
+    <div>Ter</div>
+    <div>Qua</div>
+    <div>Qui</div>
+    <div>Sex</div>
+    <div>Sáb</div>
+  </div>
+  <div class="days" id="days"></div>
+</div>
+
+<!-- Modal de Trabalho -->
+<div class="modal" id="modal">
+<div class="modal-box">
+<h3>Novo Trabalho</h3>
+<input id="title" placeholder="Título"><br><br>
+<input id="subject" placeholder="Matéria"><br><br>
+<input type="date" id="date"><br><br>
+<textarea id="obs" placeholder="Observação"></textarea><br><br>
+<input type="file" id="photo"><br><br>
+<button onclick="saveTask()" style="width:100%">Salvar</button>
+<button onclick="closeModal()" style="width:100%;margin-top:5px">Cancelar</button>
+</div>
+</div>
+
+<!-- Modal de Feriado -->
+<div class="modal" id="holidayModal">
+<div class="modal-box">
+<h3>Criar Feriado</h3>
+<input id="holidayName" placeholder="Nome"><br><br>
+<input type="date" id="holidayDate"><br><br>
+<button onclick="saveHoliday()" style="width:100%">Salvar</button>
+<button onclick="closeHolidayModal()" style="width:100%;margin-top:5px">Cancelar</button>
+<button onclick="deleteHoliday()" style="width:100%;margin-top:5px">Excluir Feriado</button>
+</div>
+</div>
+
+<!-- Modal Detalhes -->
+<div class="detail" id="detail">
+<div class="detail-box">
+<h3 id="dTitle"></h3>
+<p id="dSubject"></p>
+<p id="dDate"></p>
+<p id="dObs"></p>
+<img id="dImg">
+<br><br>
+<button onclick="markDone()">⭐ Concluído</button>
+<button onclick="deleteTask()">🗑 Excluir</button>
+<button onclick="closeDetail()">Fechar</button>
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-analytics.js";
+import { getDatabase, ref, push, set, onValue, remove, update } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
+
+// Firebase Config
+const firebaseConfig = {
+  apiKey: "AIzaSyBSJ8bxc_p3YwPOhQP18gQHxfh6tWhwNXw",
+  authDomain: "agenda-academicaweb.firebaseapp.com",
+  databaseURL: "https://agenda-academicaweb-default-rtdb.firebaseio.com",
+  projectId: "agenda-academicaweb",
+  storageBucket: "agenda-academicaweb.firebasestorage.app",
+  messagingSenderId: "492671875574",
+  appId: "1:492671875574:web:f846494a50e5840db8efd7",
+  measurementId: "G-S89X54ZD9M"
+};
+
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+const database = getDatabase(app);
+
+let currentDate = new Date();
+let selected = null;
+let tasks = {};
+let holidays = {};
+
+const monthNames = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const monthThemes = [
+  {light:"#ffffff",dark:"#bfbfbf"},
+  {light:"#7c3aed",dark:"#4c1d95"},
+  {light:"#c084fc",dark:"#7e22ce"},
+  {light:"#2563eb",dark:"#1e3a8a"},
+  {light:"#facc15",dark:"#a16207"},
+  {light:"#dc2626",dark:"#7f1d1d"},
+  {light:"#facc15",dark:"#a16207"},
+  {light:"#d4af37",dark:"#8c6b00"},
+  {light:"#facc15",dark:"#a16207"},
+  {light:"#ec4899",dark:"#9d174d"},
+  {light:"#2563eb",dark:"#1e3a8a"},
+  {light:"#dc2626",dark:"#7f1d1d"}
+];
+
+// Firebase Listeners
+onValue(ref(database, 'tasks'), (snapshot) => { tasks = snapshot.val() || {}; renderCalendar(); });
+onValue(ref(database, 'holidays'), (snapshot) => { holidays = snapshot.val() || {}; renderCalendar(); });
+
+// Funções do calendário e modais
+function renderCalendar() {
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  document.getElementById("monthDisplay").innerText = monthNames[month]+" "+year;
+  const theme = monthThemes[month];
+  document.body.style.background = document.body.classList.contains("dark") ? theme.dark : theme.light;
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month+1,0).getDate();
+  const container = document.getElementById("days");
+  container.innerHTML = "";
+
+  for(let i=0;i<firstDay;i++) container.appendChild(document.createElement("div"));
+
+  for(let d=1; d<=daysInMonth; d++){
+    const day = document.createElement("div");
+    day.className="day";
+    const dateObj = new Date(year, month, d);
+    if(dateObj.getDay()==0||dateObj.getDay()==6) day.classList.add("weekend");
+
+    const number = document.createElement("div");
+    number.className="day-number";
+    number.innerText=d;
+    day.appendChild(number);
+
+    const key = String(month+1).padStart(2,"0")+"-"+String(d).padStart(2,"0");
+
+    if(holidays[key]){
+      const h = document.createElement("div");
+      h.className="holiday";
+      h.innerText = holidays[key];
+      h.onclick = ()=>confetti({particleCount:300,spread:160});
+      day.appendChild(h);
+    }
+
+    Object.keys(tasks).forEach(id => {
+      if(tasks[id].date===`${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`){
+        const task = tasks[id];
+        const div = document.createElement("div");
+        div.className = "task " + (task.done ? "done":"");
+        div.innerHTML = "📄 "+task.title + (task.done ? '<span class="star">⭐</span>':'');
+        div.onclick = ()=>showTask(id);
+        day.appendChild(div);
+      }
+    });
+
+    if(d===new Date().getDate() && month===new Date().getMonth() && year===new Date().getFullYear()){
+      day.style.border="3px solid "+(document.body.classList.contains("dark")?"#fff":"#000");
+    }
+    container.appendChild(day);
+  }
+}
+
+function changeMonth(step){currentDate.setMonth(currentDate.getMonth()+step); renderCalendar();}
+function openModal(){document.getElementById("modal").style.display="flex";}
+function closeModal(){document.getElementById("modal").style.display="none";}
+function openHolidayModal(){document.getElementById("holidayModal").style.display="flex";}
+function closeHolidayModal(){document.getElementById("holidayModal").style.display="none";}
+
+function saveTask(){
+  const title=document.getElementById("title").value;
+  const subject=document.getElementById("subject").value;
+  const date=document.getElementById("date").value;
+  const obs=document.getElementById("obs").value;
+  const file=document.getElementById("photo").files[0];
+
+  let reader = new FileReader();
+  reader.onload = function(){
+    const newTaskRef = push(ref(database,'tasks'));
+    set(newTaskRef,{
+      title, subject, date, obs,
+      img: reader.result || "",
+      done:false
+    });
+  };
+  if(file) reader.readAsDataURL(file); else reader.onload();
+  closeModal();
+}
+
+function saveHoliday(){
+  const name=document.getElementById("holidayName").value;
+  const date=document.getElementById("holidayDate").value;
+  if(!name||!date) return;
+  const d=new Date(date);
+  const key = String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  set(ref(database, 'holidays/'+key), name);
+  closeHolidayModal();
+}
+
+function deleteHoliday(){
+  const date=document.getElementById("holidayDate").value;
+  if(!date) return;
+  const d=new Date(date);
+  const key = String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  remove(ref(database,'holidays/'+key));
+  closeHolidayModal();
+}
+
+function showTask(id){
+  selected=id;
+  const t = tasks[id];
+  document.getElementById("dTitle").innerText = t.title;
+  document.getElementById("dSubject").innerText = "Matéria: "+t.subject;
+  document.getElementById("dDate").innerText = "Data: "+t.date;
+  document.getElementById("dObs").innerText = t.obs;
+  const img=document.getElementById("dImg");
+  if(t.img){ img.src=t.img; img.style.display="block"; } else img.style.display="none";
+  document.getElementById("detail").style.display="flex";
+}
+
+function closeDetail(){document.getElementById("detail").style.display="none";}
+
+function markDone(){
+  if(!selected) return;
+  const tRef = ref(database,'tasks/'+selected);
+  update(tRef,{done: !tasks[selected].done});
+  closeDetail();
+}
+
+function deleteTask(){
+  if(!selected) return;
+  remove(ref(database,'tasks/'+selected));
+  closeDetail();
+}
+
+function toggleTheme(){document.body.classList.toggle("dark"); renderCalendar();}
+renderCalendar();
